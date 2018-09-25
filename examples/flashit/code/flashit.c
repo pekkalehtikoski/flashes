@@ -21,13 +21,26 @@
 */
 #include "eosalx.h"
 
+#ifndef FLASHES_SOCKET_PORT_STR
+#define FLASHES_SOCKET_PORT_STR ":6827"
+#endif
+
+#ifndef FLASHES_TRANSFER_BLOCK_SIZE
+#define FLASHES_TRANSFER_BLOCK_SIZE 1024
+#endif
+
+#define FLASHES_TRANSFER_TIMEOUT_MS 20000
 
 /**
 ****************************************************************************************************
 
-  @brief Process entry point.
+  @brief Flashit example program main function.
 
-  The osal_main() function is OS independent entry point.
+  The osal_main() function is OS independent entry point. This contains the flashit example
+  code. The flashit is simple command line utility to transfer binary program to MCU
+  over Ethernet.
+
+  This implementation uses non blocking sockets, but would be simpler using blocking sockets.
 
   @param   argc Number of command line arguments.
   @param   argv Array of string pointers, one for each command line argument. UTF8 encoded.
@@ -40,66 +53,201 @@ os_int osal_main(
     os_int argc,
     os_char *argv[])
 {
-    osalStream socket;
-    os_uchar buf[64], *pos, testdata[] = "?-testdata*", c = 'a';
-    os_memsz n_read, n_written;
-    os_int n;
+    osalStream f = OS_NULL, socket = OS_NULL;
+    osalStatus s;
+    os_char ipaddr[OSAL_HOST_BUF_SZ], *binfile, nbuf[16];
+    os_uchar buf[FLASHES_TRANSFER_BLOCK_SIZE], *pos = OS_NULL, reply[4], block_sz[2];
+    os_memsz n_read, n_written, buf_n;
+    os_int i, n, block_count;
     os_timer timer;
+    os_boolean whole_file_read, waiting_for_reply, terminating_zero_packet_sent;
 
-    socket = osal_socket_open("127.0.0.1:6827" , OS_NULL, OS_NULL,
+
+    /* Get IP address/port and path to binary file.
+     */
+    ipaddr[0] = '\0';
+    binfile = OS_NULL;
+    for (i = 1; i<argc; i++)
+    {
+        if (argv[i][0] == '-') continue;
+        if (ipaddr[0] == '\0')
+        {
+            os_strncpy(ipaddr, argv[i], sizeof(ipaddr));
+        }
+        else if (binfile == OS_NULL)
+        {
+            binfile = argv[i];
+        }
+    }
+    if (binfile == OS_NULL) goto showhelp;
+    os_strncat(ipaddr, FLASHES_SOCKET_PORT_STR, sizeof(ipaddr));
+
+    /* Open source file.
+     */
+    f = osal_file_open(binfile, OS_NULL, OS_NULL, OSAL_STREAM_READ);
+    if (f == OS_NULL)
+    {
+        osal_console_write("opening binary file failed\n");
+        goto getout;
+    }
+    osal_trace("binary file opened");
+
+    /* Connect socket.
+     */
+    socket = osal_stream_open(OSAL_SOCKET_IFACE, ipaddr, OS_NULL, OS_NULL,
         OSAL_STREAM_CONNECT|OSAL_STREAM_NO_SELECT);
     if (socket == OS_NULL)
     {
-        osal_debug_error("osal_stream_open failed");
-        return 0;
+        osal_console_write("socket connection failed\n");
+        goto getout;
     }
-    osal_trace("socket connected");
+    socket->write_timeout_ms = FLASHES_TRANSFER_TIMEOUT_MS;
+    osal_trace("socket connection initiated");
 
-    os_get_timer(&timer);
+    /* Transfer the program
+     */
+    buf_n = 0;
+    whole_file_read = OS_FALSE;
+    waiting_for_reply = OS_FALSE;
+    terminating_zero_packet_sent = OS_FALSE;
+    block_count = 0;
     while (OS_TRUE)
     {
         osal_socket_maintain();
 
-        if (os_elapsed(&timer, 200))
+        /* Sending data.
+         */
+        if (!waiting_for_reply)
         {
-            testdata[0] = c;
-            if (c++ == 'z') c = 'a';
-            pos = testdata;
-            n = os_strlen((os_char*)testdata) - 1;
-
-            while (n > 0)
+            /* If we need to read more data.
+             */
+            if (buf_n == 0)
             {
-                if (osal_socket_write(socket, pos, n, &n_written, OSAL_STREAM_DEFAULT))
+                if (whole_file_read)
                 {
-                    osal_debug_error("socket connection broken");
+                    buf_n = 0;
+                }
+                else
+                {
+                    s = osal_file_read(f, buf, sizeof(buf), &buf_n, OSAL_STREAM_DEFAULT);
+                    if (s)
+                    {
+                        osal_console_write("reading file failed\n");
+                        goto getout;
+                    }
+                }
+                pos = buf;
+
+                /* If all done, break.
+                 */
+                whole_file_read = (os_boolean)(buf_n < sizeof(buf));
+
+                /* Write block size with two bytes. Less significant byte first.
+                   We always write zero length block in the end to indicate end
+                   of the program.
+                 */
+                block_sz[0] = (os_uchar)buf_n;
+                block_sz[1] = (os_uchar)(buf_n >> 8);
+                n = 2;
+                s = osal_stream_write(socket, block_sz, n, &n_written, OSAL_STREAM_WAIT);
+                if (s || n_written != n)
+                {
+                    osal_console_write("socket connection broken\n");
+                    goto getout;
+                }
+                if (buf_n == 0)
+                {
+                    waiting_for_reply = terminating_zero_packet_sent = OS_TRUE;
+                    os_get_timer(&timer);
+                }
+                else
+                {
+                    osal_console_write("transferring block ");
+                    osal_int_to_string(nbuf, sizeof(nbuf), ++block_count);
+                    osal_console_write(nbuf);
+                    osal_console_write("... ");
+                }
+            }
+
+            /* Write data to socket.
+             */
+            if (buf_n)
+            {
+                s = osal_stream_write(socket, pos, buf_n, &n_written, OSAL_STREAM_DEFAULT);
+                if (s)
+                {
+                    osal_console_write("socket connection broken\n");
+                    goto getout;
+                }
+                buf_n -= n_written;
+                pos += n_written;
+                waiting_for_reply = (os_boolean)(buf_n == 0);
+                os_get_timer(&timer);
+            }
+        }
+
+        /* Waiting for reply
+         */
+        else
+        {
+            /* Try to get MCU reply.
+             */
+            os_memclear(reply, sizeof(reply));
+            if (osal_stream_read(socket, reply, sizeof(reply), &n_read, OSAL_STREAM_DEFAULT))
+            {
+                osal_console_write("socket connection broken\n");
+                goto getout;
+            }
+
+            /* If we got the replay.
+             */
+            if (n_read > 0)
+            {
+                /* If reply is OK (small 'o' letter), then all is fine. Other replies
+                   indicate error. Interrupt the transfer.
+                 */
+                if (reply[0] == 'o')
+                {
+                    osal_console_write("ok\n");
+                }
+                else
+                {
+                    osal_console_write("error\n");
+                    osal_console_write("program transfer failed\n");
                     goto getout;
                 }
 
-                n -= n_written;
-                pos += n_written;
-                if (n == 0) break;
-                os_timeslice();
+                /* No longer waiting for replay, we can move on to next packet.
+                   If this is reply to terminating zero package, all is done.
+                   Skip timeout checking by "continue".
+                 */
+                waiting_for_reply = OS_FALSE;
+                if (terminating_zero_packet_sent) break;
+                continue;
             }
-            os_get_timer(&timer);
+
+            /* Check for time out.
+             */
+            if (os_elapsed(&timer, FLASHES_TRANSFER_TIMEOUT_MS))
+            {
+                osal_console_write("waiting MCU reply timed out");
+                goto getout;
+            }
         }
 
-        os_memclear(buf, sizeof(buf));
-        if (osal_socket_read(socket, buf, sizeof(buf)-1, &n_read, OSAL_STREAM_DEFAULT))
-        {
-            osal_debug_error("socket connection broken");
-            goto getout;
-        }
-
-        if (n_read > 0)
-        {
-            osal_console_write((os_char *)buf);
-        }
-
+        /* Do not eat up all time of a processor core.
+         */
         os_timeslice();
     }
 
+    osal_console_write("Program succesfully transferred");
+
 getout:
+    osal_file_close(f);
     osal_stream_close(socket);
-    socket = OS_NULL;
+    return 0;
+
+showhelp:
+    osal_console_write("flashit 192.168.1.177 program.bin\n");
     return 0;
 }

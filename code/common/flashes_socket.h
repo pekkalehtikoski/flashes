@@ -23,6 +23,12 @@
  */
 #define FLASHES_SOCKET_PORT_STR ":6827"
 
+/** Block size for transfer, bytes. Selected so that it easily fits on RAM of microcontroller and
+    in one Ethernet frame.
+ */
+#define FLASHES_TRANSFER_BLOCK_SIZE 1024
+
+
 /* API functions.
  */
 

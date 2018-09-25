@@ -8,6 +8,5 @@ include(../../../../../eosal/build/cmake/eosal-defs.txt)
 
 # Build individual projects.
 add_subdirectory($ENV{E_ROOT}/eosal/build/cmake "${CMAKE_CURRENT_BINARY_DIR}/eosal")
-add_subdirectory($ENV{E_ROOT}/flashes/build/cmake "${CMAKE_CURRENT_BINARY_DIR}/flashes")
 add_subdirectory($ENV{E_ROOT}/flashes/examples/flashit/build/cmake "${CMAKE_CURRENT_BINARY_DIR}/flashit")
 
