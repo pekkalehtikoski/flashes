@@ -18,8 +18,11 @@
 #ifndef FLASHES_INCLUDED
 #define FLASHES_INCLUDED
 
-/* turn trace on for nor... */
+/* Turn trace on for now...
+ */
+#ifndef OSAL_TRACE
 #define OSAL_TRACE 1
+#endif
 
 /* Include operating system abstraction layer with extension headers.
  */
@@ -32,7 +35,8 @@ OSAL_C_HEADER_BEGINS
 
 /* Include all flashes library headers.
  */
-// #include "iocom/code/ioc_root.h"
+#include "code/common/flashes_write.h"
+#include "code/common/flashes_socket.h"
 
 /* If C++ compilation, end the undecorated code.
  */

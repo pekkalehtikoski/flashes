@@ -19,48 +19,87 @@
 
 ****************************************************************************************************
 */
-#include "ioboard.h"
-#include "iocom/codetemplates/ioboard_basic_static_network_io.c"
+#include "eosalx.h"
 
 
 /**
 ****************************************************************************************************
 
-  @brief IO board example 2.
+  @brief Process entry point.
 
-  The ioboard() function sets up an IO board with connects two memory blocks, inputs and
-  outputs.
+  The osal_main() function is OS independent entry point.
+
+  @param   argc Number of command line arguments.
+  @param   argv Array of string pointers, one for each command line argument. UTF8 encoded.
 
   @return  None.
 
 ****************************************************************************************************
 */
-void ioboard(void)
+os_int osal_main(
+    os_int argc,
+    os_char *argv[])
 {
-    os_uchar u;
-    os_uint uu = 100;
+    osalStream socket;
+    os_uchar buf[64], *pos, testdata[] = "?-testdata*", c = 'a';
+    os_memsz n_read, n_written;
+    os_int n;
+    os_timer timer;
 
-    /* Start IO board communication.
-     */
-    ioboard_initialize();
-
-    while (!osal_console_read())
+    socket = osal_socket_open("127.0.0.1:6827" , OS_NULL, OS_NULL,
+        OSAL_STREAM_CONNECT|OSAL_STREAM_NO_SELECT);
+    if (socket == OS_NULL)
     {
-        /* Keep the communication alive (This is single threaded approach).
-         */
-        ioc_run(&ioboard_root);
+        osal_debug_error("osal_stream_open failed");
+        return 0;
+    }
+    osal_trace("socket connected");
 
-        /* SLEEP IS NOT THE RIGHT WAY DO THIS, normally ioc_run() would be
-           called from IO board's main loop.
-         */
-        //os_sleep(10);
+    os_get_timer(&timer);
+    while (OS_TRUE)
+    {
+        osal_socket_maintain();
 
-        u = ++uu; //  / 100;
-        ioc_write(&ioboard_inputs, 2, &u, 1);
-        ioc_write(&ioboard_inputs, 400, &u, 1);
+        if (os_elapsed(&timer, 200))
+        {
+            testdata[0] = c;
+            if (c++ == 'z') c = 'a';
+            pos = testdata;
+            n = os_strlen((os_char*)testdata) - 1;
+
+            while (n > 0)
+            {
+                if (osal_socket_write(socket, pos, n, &n_written, OSAL_STREAM_DEFAULT))
+                {
+                    osal_debug_error("socket connection broken");
+                    goto getout;
+                }
+
+                n -= n_written;
+                pos += n_written;
+                if (n == 0) break;
+                os_timeslice();
+            }
+            os_get_timer(&timer);
+        }
+
+        os_memclear(buf, sizeof(buf));
+        if (osal_socket_read(socket, buf, sizeof(buf)-1, &n_read, OSAL_STREAM_DEFAULT))
+        {
+            osal_debug_error("socket connection broken");
+            goto getout;
+        }
+
+        if (n_read > 0)
+        {
+            osal_console_write((os_char *)buf);
+        }
+
+        os_timeslice();
     }
 
-    /* End IO board communication.
-     */
-    ioboard_shutdown();
+getout:
+    osal_stream_close(socket);
+    socket = OS_NULL;
+    return 0;
 }

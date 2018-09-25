@@ -3,3 +3,6 @@
 
 # Commonly used libraries for eosal console application.
 set(FLASHES_APP_LIBS "flashes${E_POSTFIX}")
+
+# Add flashes library root folder to incude path for the library header
+include_directories("$ENV{E_ROOT}/flashes")
