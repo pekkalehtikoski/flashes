@@ -1,5 +1,5 @@
-# iocom-defs.txt - Set cmake build environment variables common to all projects.
-# 5.8.2018/pekka
+# flashes-defs.txt - Set cmake build environment variables for flashes projects.
+# 24.9.2018/pekka
 
 # Commonly used libraries for eosal console application.
-set(IOCOM_APP_LIBS "iocom${E_POSTFIX}")
+set(FLASHES_APP_LIBS "flashes${E_POSTFIX}")

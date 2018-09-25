@@ -1,12 +1,12 @@
 /**
 
-  @file    iocom.h
-  @brief   Main iocom header file.
+  @file    flashes.h
+  @brief   Main library header file.
   @author  Pekka Lehtikoski
   @version 1.0
-  @date    29.7.2018
+  @date    24.9.2018
 
-  iocom library main header file. If further includes rest of base iocom headers. 
+  The flashes library main header file. If further includes rest of the library headers.
 
   Copyright 2018 Pekka Lehtikoski. This file is part of the iocom project and shall only be used,
   modified, and distributed under the terms of the project licensing. By continuing to use, modify,
@@ -15,12 +15,11 @@
 
 ****************************************************************************************************
 */
-#ifndef IOCOM_INCLUDED
-#define IOCOM_INCLUDED
+#ifndef FLASHES_INCLUDED
+#define FLASHES_INCLUDED
 
 /* turn trace on for nor... */
 #define OSAL_TRACE 1
-
 
 /* Include operating system abstraction layer with extension headers.
  */
@@ -31,17 +30,9 @@
  */
 OSAL_C_HEADER_BEGINS
 
-/* Include all base iocom headers.
+/* Include all flashes library headers.
  */
-#include "iocom/code/ioc_root.h"
-#include "iocom/code/ioc_memory_block.h"
-#include "iocom/code/ioc_connection.h"
-#if OSAL_SOCKET_SUPPORT
-#include "iocom/code/ioc_end_point.h"
-#endif
-#include "iocom/code/ioc_source_buffer.h"
-#include "iocom/code/ioc_target_buffer.h"
-#include "iocom/code/ioc_compress.h"
+// #include "iocom/code/ioc_root.h"
 
 /* If C++ compilation, end the undecorated code.
  */
