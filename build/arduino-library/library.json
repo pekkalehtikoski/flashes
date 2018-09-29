@@ -1,0 +1,15 @@
+{
+  "name": "flashes",
+  "version": "1.0.0",
+  "keywords": "flash, ethernet, tcp/ip, program",
+  "description": "Update STM32 flash over ethernet, STM32Fxx build",
+  "repository":
+  {
+    "type": "git",
+    "url": "https://github.com/pekkalehtikoski/flashes.git"
+  },
+  "frameworks": "arduino",
+  "platforms": [
+    "stm32"
+  ]
+}

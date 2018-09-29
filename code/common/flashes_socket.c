@@ -203,7 +203,10 @@ static void flashes_socket_program(
         /* Check from which flash bank we are currently running on, and setup to
            load the software to the another bank.
          */
-        state->bank2 = !flash_is_bank2_selected();
+        if (state->addr == 0)
+        {
+            state->bank2 = !flash_is_bank2_selected();
+        }
 
         /* Write program binary to flash memory.
          */

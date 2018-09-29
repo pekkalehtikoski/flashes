@@ -153,7 +153,7 @@ os_int osal_main(
                 s = osal_stream_write(socket, block_sz, n, &n_written, OSAL_STREAM_WAIT);
                 if (s || n_written != n)
                 {
-                    osal_console_write("socket connection broken\n");
+                    osal_console_write("socket connection failed\n");
                     goto getout;
                 }
                 if (buf_n == 0)
@@ -177,7 +177,7 @@ os_int osal_main(
                 s = osal_stream_write(socket, pos, buf_n, &n_written, OSAL_STREAM_DEFAULT);
                 if (s)
                 {
-                    osal_console_write("socket connection broken\n");
+                    osal_console_write("socket connection failed\n");
                     goto getout;
                 }
                 buf_n -= n_written;
@@ -231,7 +231,7 @@ os_int osal_main(
              */
             if (os_elapsed(&timer, FLASHES_TRANSFER_TIMEOUT_MS))
             {
-                osal_console_write("waiting MCU reply timed out");
+                osal_console_write("waiting MCU reply timed out\n");
                 goto getout;
             }
         }
@@ -241,7 +241,7 @@ os_int osal_main(
         os_timeslice();
     }
 
-    osal_console_write("Program succesfully transferred");
+    osal_console_write("Program succesfully transferred\n");
 
 getout:
     osal_file_close(f);

@@ -49,6 +49,17 @@ osalStatus flash_write(
     os_boolean bank2,
     os_uint *next_sector_to_erase)
 {
+    os_char strbuf[64];
+
+    osal_console_write("writing ");
+    osal_int_to_string(strbuf, sizeof(strbuf), nbytes);
+    osal_console_write(strbuf);
+    osal_console_write(" bytes at bank ");
+    osal_console_write(bank2 ? "2" : "1");
+    osal_console_write(" address ");
+    osal_int_to_string(strbuf, sizeof(strbuf), addr);
+    osal_console_write(strbuf);
+    osal_console_write("\n");
 
     return OSAL_SUCCESS;
 }
@@ -70,6 +81,7 @@ osalStatus flash_write(
 */
 os_boolean flash_is_bank2_selected(void)
 {
+    osal_console_write("check for selected bank, bank 1 returned\n");
     return OS_FALSE;
 }
 
@@ -90,5 +102,6 @@ os_boolean flash_is_bank2_selected(void)
 osalStatus flash_select_bank(
     os_boolean bank2)
 {
+    osal_console_write(bank2 ? "bank 2 selected\n" : "bank 1 selected\n");
     return OSAL_SUCCESS;
 }

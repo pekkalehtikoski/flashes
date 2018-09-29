@@ -16,9 +16,6 @@ set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY $ENV{E_LIB})
 # Set path to source files.
 set(BACKBONE "$ENV{E_ROOT}/${E_PROJECT}/code")
 
-# Set include paths.
-# include_directories($ENV{E_INCLUDE})
-
 # Add main headers.
 set(MAIN_HEADERS "$ENV{E_ROOT}/${E_PROJECT}/${E_PROJECT}.h")
 
