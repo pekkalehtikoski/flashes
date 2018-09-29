@@ -24,7 +24,8 @@
 #define FLASHES_SOCKET_PORT_STR ":6827"
 
 /** Block size for transfer, bytes. Selected so that it easily fits on RAM of microcontroller and
-    in one Ethernet frame.
+    in one Ethernet frame. This also needs to be divisible by 256, which is typical fast write
+    block size for flash. USING VALUES OTHER THAN 1024 MAY CAUSE PROBLEMS.
  */
 #define FLASHES_TRANSFER_BLOCK_SIZE 1024
 

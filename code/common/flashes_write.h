@@ -34,8 +34,12 @@
 
 /* Write program binary to flash memory.
  */
-osalStatus flashes_write(
-    void);
+osalStatus flash_write(
+    os_uint addr,
+    os_uchar* buf,
+    os_uint nbytes,
+    os_boolean bank2,
+    os_uint *next_sector_to_erase);
 
 /*@}*/
 

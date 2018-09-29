@@ -1,18 +1,12 @@
 /**
 
-  @file    ioboard.c
-  @brief   IO board example 2.
+  @file    flashit.c
+  @brief   Command line utility for Windows/Linux to transfer program to MCU over Ethernet.
   @author  Pekka Lehtikoski
   @version 1.0
-  @date    7.8.2018
+  @date    20.9.2018
 
-  ioboard2 example demonstrates basic IO board with network communication.
-
-  This example assumes one memory block for inputs and the other for outputs. Implementation
-  doesn't need dynamic memory allocation or multithreading, thus it should run on any platform
-  including microcontrollers. Template file is used for easy setup.
-
-  Copyright 2018 Pekka Lehtikoski. This file is part of the iocom project and shall only be used, 
+  Copyright 2018 Pekka Lehtikoski. This file is part of the iocom project and shall only be used,
   modified, and distributed under the terms of the project licensing. By continuing to use, modify,
   or distribute this file you indicate that you have read the license and understand and accept 
   it fully.
@@ -21,15 +15,23 @@
 */
 #include "eosalx.h"
 
+/* TCP port for transferring the program.
+ */
 #ifndef FLASHES_SOCKET_PORT_STR
 #define FLASHES_SOCKET_PORT_STR ":6827"
 #endif
 
+/* Block size for the transfer. Selected to be small enough to fit easily to MCU RAM and
+   within an Ethernet frame, but large enough not to be a bottlenect in program transfer speed.
+ */
 #ifndef FLASHES_TRANSFER_BLOCK_SIZE
 #define FLASHES_TRANSFER_BLOCK_SIZE 1024
 #endif
 
+/* Time out if transfer connection becomes silent.
+ */
 #define FLASHES_TRANSFER_TIMEOUT_MS 20000
+
 
 /**
 ****************************************************************************************************
@@ -61,7 +63,6 @@ os_int osal_main(
     os_int i, n, block_count;
     os_timer timer;
     os_boolean whole_file_read, waiting_for_reply, terminating_zero_packet_sent;
-
 
     /* Get IP address/port and path to binary file.
      */
