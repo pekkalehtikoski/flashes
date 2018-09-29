@@ -18,7 +18,8 @@
 /* TCP port for transferring the program.
  */
 #ifndef FLASHES_SOCKET_PORT_STR
-#define FLASHES_SOCKET_PORT_STR ":6827"
+// #define FLASHES_SOCKET_PORT_STR ":6827"
+#define FLASHES_SOCKET_PORT_STR ":6001"
 #endif
 
 /* Block size for the transfer. Selected to be small enough to fit easily to MCU RAM and
@@ -59,7 +60,7 @@ os_int osal_main(
 {
     osalStream f = OS_NULL, socket = OS_NULL;
     osalStatus s;
-    os_char ipaddr[OSAL_HOST_BUF_SZ], *binfile, nbuf[16];
+    os_char ipaddr[OSAL_HOST_BUF_SZ], *binfile, nbuf[64];
     os_uchar buf[FLASHES_TRANSFER_BLOCK_SIZE], *pos = OS_NULL, reply[4], block_sz[2];
     os_memsz n_read, n_written, buf_n;
     os_int i, n, block_count;

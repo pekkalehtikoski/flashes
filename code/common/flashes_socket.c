@@ -110,7 +110,7 @@ void flashes_socket_loop(void)
         }
         else
         {
-            osal_debug_error("socket already open. This example allows only one connected socket");
+            osal_debug_error("socket already open. This loader allows only one connected socket");
             osal_stream_close(accepted_socket);
         }
     }

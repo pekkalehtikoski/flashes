@@ -71,9 +71,25 @@ osalStatus flash_write(
     const os_uint dword_sz = sizeof(uint32_t);
     osalStatus err_rval = OSAL_STATUS_FAILED;
 
+    os_char strbuf[64];
+
+    osal_console_write("writing ");
+    osal_int_to_string(strbuf, sizeof(strbuf), nbytes);
+    osal_console_write(strbuf);
+    osal_console_write(" bytes at bank ");
+    osal_console_write(bank2 ? "2" : "1");
+    osal_console_write(" address ");
+    osal_int_to_string(strbuf, sizeof(strbuf), addr);
+    osal_console_write(strbuf);
+    osal_console_write("\n");
+
     /* Move to befinning of STM32 flash.
      */
     addr += 0x08000000;
+
+    /* If we are writing bank 2, switch to bank 2 address.
+     */
+    if (bank2) addr += 0x100000;
 
     /* Unlock the flash.
      */
@@ -106,8 +122,7 @@ osalStatus flash_write(
          */
         if (HAL_FLASHEx_Erase(&eraseprm, &secerror) != HAL_OK)
         {
-            //  FLASH_ErrorTypeDef errorcode = HAL_FLASH_GetError();
-            // ?????????????????????????????????????????????????????????????????????????????????????????????????
+            osal_debug_error("HAL_FLASHEx_Erase failed");
             goto failed;
         }
 
@@ -116,9 +131,6 @@ osalStatus flash_write(
         *next_sector_to_erase = last_sector + 1;
     }
 
-    /* If we are writing bank 2, switch to bank 2 address.
-     */
-    if (bank2) addr += 0x100000;
 
 #if 0
 // fast_block_sz = 256
@@ -130,8 +142,7 @@ osalStatus flash_write(
         if (HAL_FLASH_Program(i == n-1 ? FLASH_TYPEPROGRAM_FAST_AND_LAST
             : FLASH_TYPEPROGRAM_FAST, addr, (uint32_t)buf) == HAL_OK)
         {
-            //  FLASH_ErrorTypeDef errorcode = HAL_FLASH_GetError();
-            // ?????????????????????????????????????????????????????????????????????????????????????????????????
+            osal_debug_error("HAL_FLASH_Program failed");
             goto failed;
         }
 
@@ -153,7 +164,7 @@ osalStatus flash_write(
         }
         else
         {
-            //  FLASH_ErrorTypeDef errorcode = HAL_FLASH_GetError();
+            osal_debug_error("HAL_FLASH_Program failed");
             goto failed;
         }
     }
@@ -209,6 +220,8 @@ os_boolean flash_is_bank2_selected(void)
     HAL_FLASH_OB_Lock();
     HAL_FLASH_Lock();
 
+    osal_console_write("check for selected bank, ");
+    osal_console_write(bank2 ? "bank 2 returned\n" : "bank 1 returned\n");
     return bank2;
 }
 
@@ -230,7 +243,6 @@ os_boolean flash_is_bank2_selected(void)
 osalStatus flash_select_bank(
     os_boolean bank2)
 {
-    // FLASH_OBProgramInitTypeDef    OBInit;
     FLASH_AdvOBProgramInitTypeDef AdvOBInit;
     osalStatus rval = OSAL_SUCCESS;
 
@@ -295,29 +307,29 @@ static os_uint flash_get_sector(
 {
   os_uint sector;
 
-  if((addr < ADDR_FLASH_SECTOR_1) && (addr >= ADDR_FLASH_SECTOR_0))
+  if (addr < ADDR_FLASH_SECTOR_1)
   {
     sector = FLASH_SECTOR_0;
   }
-  else if((addr < ADDR_FLASH_SECTOR_2) && (addr >= ADDR_FLASH_SECTOR_1))
+  else if (addr < ADDR_FLASH_SECTOR_2)
   {
     sector = FLASH_SECTOR_1;
   }
-  else if((addr < ADDR_FLASH_SECTOR_3) && (addr >= ADDR_FLASH_SECTOR_2))
+  else if (addr < ADDR_FLASH_SECTOR_3)
   {
     sector = FLASH_SECTOR_2;
   }
-  else if((addr < ADDR_FLASH_SECTOR_4) && (addr >= ADDR_FLASH_SECTOR_3))
+  else if (addr < ADDR_FLASH_SECTOR_4)
   {
     sector = FLASH_SECTOR_3;
   }
-  else if((addr < ADDR_FLASH_SECTOR_5) && (addr >= ADDR_FLASH_SECTOR_4))
+  else if (addr < ADDR_FLASH_SECTOR_5)
   {
     sector = FLASH_SECTOR_4;
   }
   else
   {
-    sector = FLASH_SECTOR_5;
+    sector = FLASH_SECTOR_5 + (addr - ADDR_FLASH_SECTOR_5) / 0x2000; // 128 Kbytes
   }
 
   return sector;
