@@ -24,9 +24,21 @@
   @brief Write program binary to flash memory.
   @anchor flash_write
 
-  The flash_write() function...
+  The flash_write() function writes nbytes data from buffer to flash memory. When writing a
+  bigger block, this function is called repeatedly from smallest address to large
+  one. This allows erashing flash as needed.
 
-  @return  ?.
+  @param   addr Flash address. Address 0 is the beginning of the flags. This is bank 1
+           address. To write to bank 2 use bank 1 address, but set bank2 flag. This address
+           needs to be divisible by by 4 (minimum write size is dword).
+  @param   buf Pointer to data to write.
+  @param   nbytes This needs to be divisible by 4 (minimum write size is dword).
+  @param   bank2 OS_FALSE to write to bank1, OS_TRUE to write to bank 2.
+  @param   next_sector_to_erase Pointer to erase tracking variable. Set to value of
+           next_sector_to_erase to zero before the first flash_write() call. For following
+           calls, pass the same pointer. This function modifies the variable as needed.
+
+  @return  OSAL_SUCCESS if all is fine. Other values indicate an error.
 
 ****************************************************************************************************
 */
@@ -41,3 +53,42 @@ osalStatus flash_write(
     return OSAL_SUCCESS;
 }
 
+
+/**
+****************************************************************************************************
+
+  @brief Check which bank is currently selected?
+  @anchor flash_is_bank2_selected
+
+  The flash_is_bank2_selected() function checks if we are currently running from flash bank 2.
+
+  Option bit FLASH_OPTCR_BFB2 bit is "boot from bank 2".
+
+  @return  OS_TRUE if running from bank 2, OS_FALSE if running from bank 1.
+
+****************************************************************************************************
+*/
+os_boolean flash_is_bank2_selected(void)
+{
+    return OS_FALSE;
+}
+
+
+/**
+****************************************************************************************************
+
+  @brief Set bank to boot from and reboot.
+  @anchor flash_select_bank
+
+  The flash_is_bank2_selected() function checks if we are currently running from flash bank 2.
+
+  @param   bank2 OS_TRUE to select flash bank 2, or OS_FALSE to select bank 1.
+  @return  OSAL_SUCCESS (0) if all is fine. Other values indicate an error.
+
+****************************************************************************************************
+*/
+osalStatus flash_select_bank(
+    os_boolean bank2)
+{
+    return OSAL_SUCCESS;
+}

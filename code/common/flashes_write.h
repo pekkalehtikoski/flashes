@@ -41,6 +41,15 @@ osalStatus flash_write(
     os_boolean bank2,
     os_uint *next_sector_to_erase);
 
+/* Check which bank is currently selected?
+ */
+os_boolean flash_is_bank2_selected(void);
+
+/* Set bank to boot from and reboot.
+ */
+osalStatus flash_select_bank(
+    os_boolean bank2);
+
 /*@}*/
 
 #endif

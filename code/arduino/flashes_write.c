@@ -44,7 +44,7 @@ static os_uint flash_get_sector(
   bigger block, this function is called repeatedly from smallest address to large
   one. This allows erashing flash as needed.
 
-  @param   addr Flash address. Address 0x08000000 is the beginning of the flags. This is bank 1
+  @param   addr Flash address. Address 0 is the beginning of the flags. This is bank 1
            address. To write to bank 2 use bank 1 address, but set bank2 flag. This address
            needs to be divisible by by 4 (minimum write size is dword).
   @param   buf Pointer to data to write.
@@ -65,20 +65,19 @@ osalStatus flash_write(
     os_boolean bank2,
     os_uint *next_sector_to_erase)
 {
-    static FLASH_EraseInitTypeDef
-        eraseprm;
+    static FLASH_EraseInitTypeDef eraseprm;
+    os_uint first_sector, last_sector;
+    uint32_t secerror = 0;
+    const os_uint dword_sz = sizeof(uint32_t);
+    osalStatus err_rval = OSAL_STATUS_FAILED;
 
-    os_uint
-        first_sector,
-        last_sector;
+    /* Move to befinning of STM32 flash.
+     */
+    addr += 0x08000000;
 
-    uint32_t
-        secerror = 0;
-
-    const os_uint
-        // fast_block_sz = 256,
-        dword_sz = sizeof(uint32_t);
-
+    /* Unlock the flash.
+     */
+    HAL_FLASH_Unlock();
 
     /* The first and last sector to write
      */
@@ -109,7 +108,7 @@ osalStatus flash_write(
         {
             //  FLASH_ErrorTypeDef errorcode = HAL_FLASH_GetError();
             // ?????????????????????????????????????????????????????????????????????????????????????????????????
-            return OSAL_STATUS_FAILED;
+            goto failed;
         }
 
         /* Maintain next unerased sector.
@@ -122,6 +121,7 @@ osalStatus flash_write(
     if (bank2) addr += 0x100000;
 
 #if 0
+// fast_block_sz = 256
     /* FAST 8 x 32 bytes. Calculate number of 256 byte writes.
      */
     n = nbytes / fast_block_sz;
@@ -132,7 +132,7 @@ osalStatus flash_write(
         {
             //  FLASH_ErrorTypeDef errorcode = HAL_FLASH_GetError();
             // ?????????????????????????????????????????????????????????????????????????????????????????????????
-            return OSAL_STATUS_FAILED;
+            goto failed;
         }
 
         buf += fast_block_sz;
@@ -141,7 +141,7 @@ osalStatus flash_write(
     }
 #endif
 
-    /* Write rest as dwords (normally we should have these only for the last block)
+    /* Write rest as dwords
      */
     while (nbytes > 0)
     {
@@ -154,12 +154,126 @@ osalStatus flash_write(
         else
         {
             //  FLASH_ErrorTypeDef errorcode = HAL_FLASH_GetError();
-            return OSAL_STATUS_FAILED;
+            goto failed;
         }
     }
 
+    /* Lock the flash.
+     */
+    HAL_FLASH_Lock();
     return OSAL_SUCCESS;
+
+failed:
+    HAL_FLASH_Lock();
+    return err_rval;
 }
+
+
+/**
+****************************************************************************************************
+
+  @brief Check which bank is currently selected?
+  @anchor flash_is_bank2_selected
+
+  The flash_is_bank2_selected() function checks if we are currently running from flash bank 2.
+
+  Option bit FLASH_OPTCR_BFB2 bit is "boot from bank 2".
+
+  @return  OS_TRUE if running from bank 2, OS_FALSE if running from bank 1.
+
+****************************************************************************************************
+*/
+os_boolean flash_is_bank2_selected(void)
+{
+    FLASH_AdvOBProgramInitTypeDef AdvOBInit;
+    os_boolean bank2;
+
+    os_memclear(&AdvOBInit, sizeof(AdvOBInit));
+
+    /* Allow access to flash control registers and user falsh, and to option bytes sector.
+     */
+    HAL_FLASH_Unlock();
+    HAL_FLASH_OB_Unlock();
+
+    /* Get the dual boot configuration status.
+     */
+    AdvOBInit.OptionType = OBEX_BOOTCONFIG;
+    HAL_FLASHEx_AdvOBGetConfig(&AdvOBInit);
+
+    /* If we are dual boot is currently enabled?
+     */
+    bank2 = (((AdvOBInit.BootConfig) & (FLASH_OPTCR_BFB2)) == FLASH_OPTCR_BFB2) ? OS_TRUE : OS_FALSE;
+
+    /* Put lock back to place.
+     */
+    HAL_FLASH_OB_Lock();
+    HAL_FLASH_Lock();
+
+    return bank2;
+}
+
+
+
+/**
+****************************************************************************************************
+
+  @brief Set bank to boot from and reboot.
+  @anchor flash_select_bank
+
+  The flash_is_bank2_selected() function checks if we are currently running from flash bank 2.
+
+  @param   bank2 OS_TRUE to select flash bank 2, or OS_FALSE to select bank 1.
+  @return  OSAL_SUCCESS (0) if all is fine. Other values indicate an error.
+
+****************************************************************************************************
+*/
+osalStatus flash_select_bank(
+    os_boolean bank2)
+{
+    // FLASH_OBProgramInitTypeDef    OBInit;
+    FLASH_AdvOBProgramInitTypeDef AdvOBInit;
+    osalStatus rval = OSAL_SUCCESS;
+
+    os_memclear(&AdvOBInit, sizeof(AdvOBInit));
+
+    /* Allow access to flash control registers and user falsh, and to option bytes sector.
+     */
+    HAL_FLASH_Unlock();
+    HAL_FLASH_OB_Unlock();
+
+    /* Get the dual boot configuration status.
+     */
+    AdvOBInit.OptionType = OBEX_BOOTCONFIG;
+    HAL_FLASHEx_AdvOBGetConfig(&AdvOBInit);
+
+    /* Enable or Disable dual boot feature accorging to bank2 argument.
+     */
+    if (bank2)
+    {
+        AdvOBInit.BootConfig = OB_DUAL_BOOT_ENABLE;
+        HAL_FLASHEx_AdvOBProgram (&AdvOBInit);
+Serial.println("Set next boot to bank 2");
+    }
+    else {
+        AdvOBInit.BootConfig = OB_DUAL_BOOT_DISABLE;
+        HAL_FLASHEx_AdvOBProgram (&AdvOBInit);
+Serial.println("Set next boot to bank 1");
+    }
+
+    /* Start the option bytes programming process */
+    if (HAL_FLASH_OB_Launch() != HAL_OK)
+    {
+        rval = OSAL_STATUS_FAILED;
+    }
+
+    /* Put lock back to place.
+     */
+    HAL_FLASH_OB_Lock();
+    HAL_FLASH_Lock();
+
+    return rval;
+}
+
 
 
 /**
