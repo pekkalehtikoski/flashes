@@ -156,7 +156,7 @@ osalStatus flash_write(
      */
     while (nbytes > 0)
     {
-        if (HAL_FLASH_Program(FLASH_TYPEPROGRAM_DOUBLEWORD, addr, *(uint32_t*)buf) == HAL_OK)
+        if (HAL_FLASH_Program(FLASH_TYPEPROGRAM_WORD, addr, *(uint32_t*)buf) == HAL_OK)
         {
             buf += dword_sz;
             addr += dword_sz;
