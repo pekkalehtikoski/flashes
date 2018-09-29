@@ -1,9 +1,11 @@
+#include <Arduino.h>
 #include <eosal.h>
 #include <eosalx.h>
+#include <flashes.h>
 
 /*
-  simple_socket_server_example
-  Example to include simple app to build it within Arduino IDE. Here it is socket
+  mcu_flashes
+  Example to load and start flashes library 
   echo server.
  */
  
@@ -43,14 +45,14 @@ void setup()
     }
     Serial.println("Arduino starting...");
 
-    // Start the very simple echo socket server.
+    // Initialize OS abtraction layer and start flashes on socket.
     osal_initialize(OSAL_INIT_DEFAULT);
-    example_setup();
+    flashes_socket_setup();
 }
 
 void loop()
 {
-    example_loop();
+    flashes_socket_loop();
     toggle_leds();
 }
 

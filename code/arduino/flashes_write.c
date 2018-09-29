@@ -252,12 +252,10 @@ osalStatus flash_select_bank(
     {
         AdvOBInit.BootConfig = OB_DUAL_BOOT_ENABLE;
         HAL_FLASHEx_AdvOBProgram (&AdvOBInit);
-Serial.println("Set next boot to bank 2");
     }
     else {
         AdvOBInit.BootConfig = OB_DUAL_BOOT_DISABLE;
         HAL_FLASHEx_AdvOBProgram (&AdvOBInit);
-Serial.println("Set next boot to bank 1");
     }
 
     /* Start the option bytes programming process */

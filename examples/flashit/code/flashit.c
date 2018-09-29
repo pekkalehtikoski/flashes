@@ -23,6 +23,8 @@
 
 /* Block size for the transfer. Selected to be small enough to fit easily to MCU RAM and
    within an Ethernet frame, but large enough not to be a bottlenect in program transfer speed.
+   This must be also divisible by minimum transfer size. Changing block size from 1024 may
+   cause problems.
  */
 #ifndef FLASHES_TRANSFER_BLOCK_SIZE
 #define FLASHES_TRANSFER_BLOCK_SIZE 1024
