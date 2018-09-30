@@ -15,13 +15,19 @@
 
 ****************************************************************************************************
 */
+
+#define OSAL_TRACE 2
 #include "flashes.h"
 
 #include "Arduino.h"
+// #ifdef STM32F429xx
+
+#ifdef STM32F4xx
 #include "stm32f4xx_hal_flash.h"
+#include "stm32f4xx_ll_system.h"
+#endif
 
-
-/* Base address of the flash sectors, bank 1
+/* Base address of the flash sectors, bank 1 THESE ARE VERY CHIP SPECIFIC
  */
 #define ADDR_FLASH_SECTOR_0     ((uint32_t)0x08000000) /* Base @ of Sector 0, 16 Kbytes */
 #define ADDR_FLASH_SECTOR_1     ((uint32_t)0x08004000) /* Base @ of Sector 1, 16 Kbytes */
@@ -30,6 +36,9 @@
 #define ADDR_FLASH_SECTOR_4     ((uint32_t)0x08010000) /* Base @ of Sector 4, 64 Kbytes */
 #define ADDR_FLASH_SECTOR_5     ((uint32_t)0x08020000) /* Base @ of Sector 5, 128 Kbytes */
 
+#define ADDR_BANK_1_START       ((uint32_t)0x08000000)
+#define ADDR_BANK_2_START       ((uint32_t)0x08100000)
+#define FIRST_BANK_2_SECTOR     FLASH_SECTOR_12
 
 static os_uint flash_get_sector(
     os_uint addr);
@@ -66,13 +75,20 @@ osalStatus flash_write(
     os_uint *next_sector_to_erase)
 {
     static FLASH_EraseInitTypeDef eraseprm;
-    os_uint first_sector, last_sector;
+    os_uint first_sector, last_sector, progaddr;
     uint32_t secerror = 0;
     const os_uint dword_sz = sizeof(uint32_t);
     osalStatus err_rval = OSAL_STATUS_FAILED;
 
     os_char strbuf[64];
 
+    /* Move to the beginning of STM32 flash banks.
+     * Programming address is always bank 2. Erase sector handled differently.
+     */
+    progaddr = addr + ADDR_BANK_2_START;
+    addr += bank2 ? ADDR_BANK_2_START : ADDR_BANK_1_START;
+
+#if OSAL_TRACE >= 2
     osal_console_write("writing ");
     osal_int_to_string(strbuf, sizeof(strbuf), nbytes);
     osal_console_write(strbuf);
@@ -82,14 +98,7 @@ osalStatus flash_write(
     osal_int_to_string(strbuf, sizeof(strbuf), addr);
     osal_console_write(strbuf);
     osal_console_write("\n");
-
-    /* Move to befinning of STM32 flash.
-     */
-    addr += 0x08000000;
-
-    /* If we are writing bank 2, switch to bank 2 address.
-     */
-    if (bank2) addr += 0x100000;
+#endif
 
     /* Unlock the flash.
      */
@@ -98,7 +107,7 @@ osalStatus flash_write(
     /* The first and last sector to write
      */
     first_sector = flash_get_sector(addr);
-    last_sector = flash_get_sector(addr - nbytes + 1);
+    last_sector = flash_get_sector(addr + nbytes - 1);
 
     /* Erase if not done already
      */
@@ -116,7 +125,17 @@ osalStatus flash_write(
         eraseprm.VoltageRange = VOLTAGE_RANGE_3;
         eraseprm.Sector = first_sector;
         eraseprm.NbSectors = last_sector - first_sector + 1;
-        eraseprm.Banks = bank2 ? FLASH_BANK_2 : FLASH_BANK_1;
+//        eraseprm.Banks = bank2 ? FLASH_BANK_2 : FLASH_BANK_1;
+
+#if OSAL_TRACE >= 2
+        osal_console_write("erasing ");
+        osal_int_to_string(strbuf, sizeof(strbuf), eraseprm.NbSectors);
+        osal_console_write(strbuf);
+        osal_console_write(" sectors starting from  ");
+        osal_int_to_string(strbuf, sizeof(strbuf), eraseprm.Sector);
+        osal_console_write(strbuf);
+        osal_console_write("\n");
+#endif
 
         /* Erase the flags as we go.
          */
@@ -153,13 +172,14 @@ osalStatus flash_write(
 #endif
 
     /* Write rest as dwords
+     * Your flash start address when programming should always be 0x08100000 (2 MB flash).
      */
     while (nbytes > 0)
     {
-        if (HAL_FLASH_Program(FLASH_TYPEPROGRAM_WORD, addr, *(uint32_t*)buf) == HAL_OK)
+        if (HAL_FLASH_Program(FLASH_TYPEPROGRAM_WORD, progaddr, *(uint32_t*)buf) == HAL_OK)
         {
             buf += dword_sz;
-            addr += dword_sz;
+            progaddr += dword_sz;
             nbytes -= dword_sz;
         }
         else
@@ -198,6 +218,7 @@ os_boolean flash_is_bank2_selected(void)
 {
     FLASH_AdvOBProgramInitTypeDef AdvOBInit;
     os_boolean bank2;
+    uint32_t bankmode;
 
     os_memclear(&AdvOBInit, sizeof(AdvOBInit));
 
@@ -215,16 +236,27 @@ os_boolean flash_is_bank2_selected(void)
      */
     bank2 = (((AdvOBInit.BootConfig) & (FLASH_OPTCR_BFB2)) == FLASH_OPTCR_BFB2) ? OS_TRUE : OS_FALSE;
 
+    bankmode = LL_SYSCFG_GetFlashBankMode();
+
     /* Put lock back to place.
      */
     HAL_FLASH_OB_Lock();
     HAL_FLASH_Lock();
 
+#if OSAL_TRACE >= 2
     osal_console_write("check for selected bank, ");
     osal_console_write(bank2 ? "bank 2 returned\n" : "bank 1 returned\n");
-    return bank2;
-}
+    osal_console_write("bank mode, ");
+    osal_console_write(bankmode ==  LL_SYSCFG_BANKMODE_BANK2 ? "bank 2\n" : "bank 1\n");
+#endif
 
+    if (bank2 && bankmode !=  LL_SYSCFG_BANKMODE_BANK2)
+    {
+        flash_select_bank(OS_FALSE);
+    }
+
+    return bank2 && (bankmode ==  LL_SYSCFG_BANKMODE_BANK2);
+}
 
 
 /**
@@ -281,6 +313,11 @@ osalStatus flash_select_bank(
     HAL_FLASH_OB_Lock();
     HAL_FLASH_Lock();
 
+#if OSAL_TRACE >= 2
+    osal_console_write("setting boot bank boot: ");
+    osal_console_write(bank2 ? "bank 2\n" : "bank 1\n");
+#endif
+
     return rval;
 }
 
@@ -295,9 +332,7 @@ osalStatus flash_select_bank(
   The flash_get_sector() function converts bank 1 address to sector number. Flash is erased
   by sectors.
 
-
-  @param   addr Flash address. Address 0x08000000 is the beginning of the flags. This is bank 1
-           address.
+  @param   addr Flash address. Address 0x08000000 is the beginning of the flagh.
   @return  Sector number for the given address.
 
 ****************************************************************************************************
@@ -305,32 +340,37 @@ osalStatus flash_select_bank(
 static os_uint flash_get_sector(
     os_uint addr)
 {
-  os_uint sector;
+    os_uint sector;
 
-  if (addr < ADDR_FLASH_SECTOR_1)
-  {
-    sector = FLASH_SECTOR_0;
-  }
-  else if (addr < ADDR_FLASH_SECTOR_2)
-  {
-    sector = FLASH_SECTOR_1;
-  }
-  else if (addr < ADDR_FLASH_SECTOR_3)
-  {
-    sector = FLASH_SECTOR_2;
-  }
-  else if (addr < ADDR_FLASH_SECTOR_4)
-  {
-    sector = FLASH_SECTOR_3;
-  }
-  else if (addr < ADDR_FLASH_SECTOR_5)
-  {
-    sector = FLASH_SECTOR_4;
-  }
-  else
-  {
-    sector = FLASH_SECTOR_5 + (addr - ADDR_FLASH_SECTOR_5) / 0x2000; // 128 Kbytes
-  }
+    if (addr >= ADDR_BANK_2_START)
+    {
+        return FIRST_BANK_2_SECTOR + flash_get_sector(addr - ADDR_BANK_2_START + ADDR_BANK_1_START);
+    }
 
-  return sector;
+    if (addr < ADDR_FLASH_SECTOR_1)
+    {
+        sector = FLASH_SECTOR_0;
+    }
+    else if (addr < ADDR_FLASH_SECTOR_2)
+    {
+        sector = FLASH_SECTOR_1;
+    }
+    else if (addr < ADDR_FLASH_SECTOR_3)
+    {
+        sector = FLASH_SECTOR_2;
+    }
+    else if (addr < ADDR_FLASH_SECTOR_4)
+    {
+        sector = FLASH_SECTOR_3;
+    }
+    else if (addr < ADDR_FLASH_SECTOR_5)
+    {
+        sector = FLASH_SECTOR_4;
+    }
+    else
+    {
+        sector = FLASH_SECTOR_5 + (addr - ADDR_FLASH_SECTOR_5) / 0x20000; // 128 Kbytes
+    }
+
+    return sector;
 }

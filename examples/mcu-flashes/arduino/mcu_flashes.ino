@@ -1,5 +1,4 @@
 #include <Arduino.h>
-#include <eosal.h>
 #include <eosalx.h>
 #include <flashes.h>
 
@@ -11,21 +10,19 @@
  
 #define N_LEDS 3
 const int leds[N_LEDS] = {PB0, PB14, PB7};
+os_timer ledtimer;
 
 static void toggle_leds(void)
 {
     static int lednr = 0;
-
-    digitalWrite(leds[lednr], HIGH);
-    delay(30);
-    digitalWrite(leds[lednr], LOW);
-    delay(50);
-    if (++lednr >= N_LEDS) lednr = 0;
+    if (os_elapsed(&ledtimer, 30))
+    {
+      digitalWrite(leds[lednr], LOW);
+      if (++lednr >= N_LEDS) lednr = 0;
+      digitalWrite(leds[lednr], HIGH);
+      os_get_timer(&ledtimer);
+    }
 }
-
-
-// Include code for eacho server (at the time of writing IP 192.168.1.201, TCP port 6001)
-#include "/coderoot/eosal/examples/simple_socket_server/code/simple_socket_server_example.c"
 
 void setup() 
 {
@@ -43,7 +40,7 @@ void setup()
     {
         toggle_leds();
     }
-    Serial.println("Arduino starting...");
+    Serial.println("Starting...");
 
     // Initialize OS abtraction layer and start flashes on socket.
     osal_initialize(OSAL_INIT_DEFAULT);

@@ -72,6 +72,9 @@ void flashes_socket_setup(void)
     }
     os_memclear(&flsock_state, sizeof(flsock_state));
     osal_trace("listening for socket connections");
+
+    /* Only to display the trace */
+    flash_is_bank2_selected();
 }
 
 
@@ -193,6 +196,11 @@ static void flashes_socket_program(
          */
         osal_stream_close(state->socket);
         state->socket = OS_NULL;
+
+        /* Reboot the computer.
+         */
+os_sleep(1000);
+        osal_reboot(0);
         return;
     }
 

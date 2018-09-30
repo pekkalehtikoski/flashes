@@ -18,8 +18,7 @@
 /* TCP port for transferring the program.
  */
 #ifndef FLASHES_SOCKET_PORT_STR
-// #define FLASHES_SOCKET_PORT_STR ":6827"
-#define FLASHES_SOCKET_PORT_STR ":6001"
+#define FLASHES_SOCKET_PORT_STR ":6827"
 #endif
 
 /* Block size for the transfer. Selected to be small enough to fit easily to MCU RAM and
