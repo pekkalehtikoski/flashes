@@ -27,6 +27,12 @@
 #include "stm32f4xx_ll_system.h"
 #endif
 
+/* Select either boot loader mode or dual bank mode
+ */
+#define FLASHES_BOOT_LOADER_MODE 0
+#define FLASHES_DUAL_BANK_MODE 1
+
+
 /* Base address of the flash sectors, bank 1 THESE ARE VERY CHIP SPECIFIC
  */
 #define ADDR_FLASH_SECTOR_0     ((uint32_t)0x08000000) /* Base @ of Sector 0, 16 Kbytes */
@@ -40,16 +46,20 @@
 #define ADDR_BANK_2_START       ((uint32_t)0x08100000)
 #define FIRST_BANK_2_SECTOR     FLASH_SECTOR_12
 
-static os_uint flash_get_sector(
+/* In boot loaded mode
+ */
+#define APPLICATION_BASE_ADDR ADDR_FLASH_SECTOR_5
+
+static os_uint flashes_get_sector(
     os_uint addr);
 
 /**
 ****************************************************************************************************
 
   @brief Write program binary to flash memory.
-  @anchor flash_write
+  @anchor flashes_write
 
-  The flash_write() function writes nbytes data from buffer to flash memory. When writing a
+  The flashes_write() function writes nbytes data from buffer to flash memory. When writing a
   bigger block, this function is called repeatedly from smallest address to large
   one. This allows erashing flash as needed.
 
@@ -67,7 +77,7 @@ static os_uint flash_get_sector(
 
 ****************************************************************************************************
 */
-osalStatus flash_write(
+osalStatus flashes_write(
     os_uint addr,
     os_uchar* buf,
     os_uint nbytes,
@@ -82,11 +92,20 @@ osalStatus flash_write(
 
     os_char strbuf[64];
 
+#if FLASHES_DUAL_BANK_MODE
     /* Move to the beginning of STM32 flash banks.
-     * Programming address is always bank 2. Erase sector handled differently.
+     * Programming address is always bank 2.
+     * Erase sector handled handled by address within bank beging written.
      */
     progaddr = addr + ADDR_BANK_2_START;
     addr += bank2 ? ADDR_BANK_2_START : ADDR_BANK_1_START;
+#else
+    /* Boot loader mode. We always write bank 1.
+     */
+    bank2 = OS_FALSE;
+    addr += APPLICATION_BASE_ADDR;
+    progaddr = addr;
+#endif
 
 #if OSAL_TRACE >= 2
     osal_console_write("writing ");
@@ -106,8 +125,8 @@ osalStatus flash_write(
 
     /* The first and last sector to write
      */
-    first_sector = flash_get_sector(addr);
-    last_sector = flash_get_sector(addr + nbytes - 1);
+    first_sector = flashes_get_sector(addr);
+    last_sector = flashes_get_sector(addr + nbytes - 1);
 
     /* Erase if not done already
      */
@@ -125,7 +144,6 @@ osalStatus flash_write(
         eraseprm.VoltageRange = VOLTAGE_RANGE_3;
         eraseprm.Sector = first_sector;
         eraseprm.NbSectors = last_sector - first_sector + 1;
-//        eraseprm.Banks = bank2 ? FLASH_BANK_2 : FLASH_BANK_1;
 
 #if OSAL_TRACE >= 2
         osal_console_write("erasing ");
@@ -204,9 +222,9 @@ failed:
 ****************************************************************************************************
 
   @brief Check which bank is currently selected?
-  @anchor flash_is_bank2_selected
+  @anchor flashes_is_bank2_selected
 
-  The flash_is_bank2_selected() function checks if we are currently running from flash bank 2.
+  The flashes_is_bank2_selected() function checks if we are currently running from flash bank 2.
 
   Option bit FLASH_OPTCR_BFB2 bit is "boot from bank 2".
 
@@ -214,7 +232,7 @@ failed:
 
 ****************************************************************************************************
 */
-os_boolean flash_is_bank2_selected(void)
+os_boolean flashes_is_bank2_selected(void)
 {
     FLASH_AdvOBProgramInitTypeDef AdvOBInit;
     os_boolean bank2;
@@ -236,6 +254,21 @@ os_boolean flash_is_bank2_selected(void)
      */
     bank2 = (((AdvOBInit.BootConfig) & (FLASH_OPTCR_BFB2)) == FLASH_OPTCR_BFB2) ? OS_TRUE : OS_FALSE;
 
+#if FLASHES_BOOT_LOADER_MODE
+    /* In boot loader mode: If bank to is active, switch to bank 1.
+     */
+    if (bank2)
+    {
+        AdvOBInit.BootConfig = OB_DUAL_BOOT_DISABLE;
+
+        /* Start the option bytes programming process */
+        if (HAL_FLASH_OB_Launch() != HAL_OK)
+        {
+            osal_debug_error("HAL_FLASH_OB_Launch failed");
+        }
+    }
+#endif
+
     bankmode = LL_SYSCFG_GetFlashBankMode();
 
     /* Put lock back to place.
@@ -252,7 +285,7 @@ os_boolean flash_is_bank2_selected(void)
 
     if (bank2 && bankmode !=  LL_SYSCFG_BANKMODE_BANK2)
     {
-        flash_select_bank(OS_FALSE);
+        flashes_select_bank(OS_FALSE);
     }
 
     return bank2 && (bankmode ==  LL_SYSCFG_BANKMODE_BANK2);
@@ -263,21 +296,22 @@ os_boolean flash_is_bank2_selected(void)
 ****************************************************************************************************
 
   @brief Set bank to boot from and reboot.
-  @anchor flash_select_bank
+  @anchor flashes_select_bank
 
-  The flash_is_bank2_selected() function checks if we are currently running from flash bank 2.
+  The flashes_is_bank2_selected() function checks if we are currently running from flash bank 2.
 
   @param   bank2 OS_TRUE to select flash bank 2, or OS_FALSE to select bank 1.
   @return  OSAL_SUCCESS (0) if all is fine. Other values indicate an error.
 
 ****************************************************************************************************
 */
-osalStatus flash_select_bank(
+osalStatus flashes_select_bank(
     os_boolean bank2)
 {
-    FLASH_AdvOBProgramInitTypeDef AdvOBInit;
     osalStatus rval = OSAL_SUCCESS;
 
+#if FLASHES_DUAL_BANK_MODE
+    FLASH_AdvOBProgramInitTypeDef AdvOBInit;
     os_memclear(&AdvOBInit, sizeof(AdvOBInit));
 
     /* Allow access to flash control registers and user falsh, and to option bytes sector.
@@ -318,6 +352,7 @@ osalStatus flash_select_bank(
     osal_console_write(bank2 ? "bank 2\n" : "bank 1\n");
 #endif
 
+#endif
     return rval;
 }
 
@@ -337,14 +372,14 @@ osalStatus flash_select_bank(
 
 ****************************************************************************************************
 */
-static os_uint flash_get_sector(
+static os_uint flashes_get_sector(
     os_uint addr)
 {
     os_uint sector;
 
     if (addr >= ADDR_BANK_2_START)
     {
-        return FIRST_BANK_2_SECTOR + flash_get_sector(addr - ADDR_BANK_2_START + ADDR_BANK_1_START);
+        return FIRST_BANK_2_SECTOR + flashes_get_sector(addr - ADDR_BANK_2_START + ADDR_BANK_1_START);
     }
 
     if (addr < ADDR_FLASH_SECTOR_1)
@@ -373,4 +408,70 @@ static os_uint flash_get_sector(
     }
 
     return sector;
+}
+
+
+#if 0
+void nvicDisableInterrupts() {
+    NVIC_TypeDef *rNVIC = (NVIC_TypeDef *) NVIC_BASE;
+    rNVIC->ICER[0] = 0xFFFFFFFF;
+    rNVIC->ICER[1] = 0xFFFFFFFF;
+    rNVIC->ICPR[0] = 0xFFFFFFFF;
+    rNVIC->ICPR[1] = 0xFFFFFFFF;
+
+    SET_REG(STK_CTRL, 0x04); /* disable the systick, which operates separately from nvic */
+}
+
+void systemReset(void) {
+    SET_REG(RCC_CR, GET_REG(RCC_CR)     | 0x00000001);
+    SET_REG(RCC_CFGR, GET_REG(RCC_CFGR) & 0xF8FF0000);
+    SET_REG(RCC_CR, GET_REG(RCC_CR)     & 0xFEF6FFFF);
+    SET_REG(RCC_CR, GET_REG(RCC_CR)     & 0xFFFBFFFF);
+    SET_REG(RCC_CFGR, GET_REG(RCC_CFGR) & 0xFF80FFFF);
+
+    SET_REG(RCC_CIR, 0x00000000);  /* disable all RCC interrupts */
+}
+#endif
+
+void setMspAndJump(os_uint usrAddr) {
+    // Dedicated function with no call to any function (appart the last call)
+    // This way, there is no manipulation of the stack here, ensuring that GGC
+    // didn't insert any pop from the SP after having set the MSP.
+    typedef void (*funcPtr)(void);
+    os_uint jumpAddr = *(volatile os_uint *)(usrAddr + 0x04); /* reset ptr in vector table */
+
+    funcPtr usrMain = (funcPtr) jumpAddr;
+
+//    SET_REG(SCB_VTOR, (vu32) (usrAddr));
+    SCB->VTOR = usrAddr;
+
+    asm volatile("msr msp, %0"::"g"(*(volatile os_uint *)usrAddr));
+
+    usrMain();                                /* go! */
+}
+
+
+void flashes_jump_to_application(void)
+{
+#if FLASHES_BOOT_LOADER_MODE
+
+    /* tear down all the dfu related setup */
+    // disable usb interrupts, clear them, turn off usb, set the disc pin
+    // todo pick exactly what we want to do here, now its just a conservative
+//    flashLock();
+//    usbDsbISR();
+//    nvicDisableInterrupts();
+    HAL_NVIC_DisableIRQ(0);
+    HAL_NVIC_DisableIRQ(1);
+    HAL_NVIC_DisableIRQ(2);
+    HAL_NVIC_DisableIRQ(3);
+    HAL_NVIC_DisableIRQ(4);
+
+// Does nothing, as PC12 is not connected on teh Maple mini according to the schemmatic     setPin(GPIOC, 12); // disconnect usb from host. todo, macroize pin
+    // systemReset(); // resets clocks and periphs, not core regs
+
+    // HAL_NVIC_SystemReset();
+
+    setMspAndJump(APPLICATION_BASE_ADDR);
+#endif
 }

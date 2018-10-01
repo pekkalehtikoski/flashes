@@ -34,7 +34,7 @@
 
 /* Write program binary to flash memory.
  */
-osalStatus flash_write(
+osalStatus flashes_write(
     os_uint addr,
     os_uchar* buf,
     os_uint nbytes,
@@ -43,12 +43,16 @@ osalStatus flash_write(
 
 /* Check which bank is currently selected?
  */
-os_boolean flash_is_bank2_selected(void);
+os_boolean flashes_is_bank2_selected(void);
 
 /* Set bank to boot from and reboot.
  */
-osalStatus flash_select_bank(
+osalStatus flashes_select_bank(
     os_boolean bank2);
+
+/* Start user application.
+ */
+void flashes_jump_to_application(void);
 
 /*@}*/
 

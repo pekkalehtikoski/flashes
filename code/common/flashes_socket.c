@@ -45,6 +45,8 @@ flashesProgrammingState;
 
 static flashesProgrammingState flsock_state;
 
+static os_timer boot_timer;
+
 
 static void flashes_socket_program(
     flashesProgrammingState *state);
@@ -73,8 +75,11 @@ void flashes_socket_setup(void)
     os_memclear(&flsock_state, sizeof(flsock_state));
     osal_trace("listening for socket connections");
 
-    /* Only to display the trace */
-    flash_is_bank2_selected();
+    os_get_timer(&boot_timer);
+
+    /* Only to display the trace
+    flashes_is_bank2_selected(); */
+
 }
 
 
@@ -121,6 +126,11 @@ void flashes_socket_loop(void)
     if (flsock_state.socket)
     {
         flashes_socket_program(&flsock_state);
+        os_get_timer(&boot_timer);
+    }
+    else if (os_elapsed(&boot_timer, 5000))
+    {
+        flashes_jump_to_application();
     }
 }
 
@@ -184,7 +194,7 @@ static void flashes_socket_program(
     {
         /* Set bank to boot from and reboot.
         */
-        s = flash_select_bank(state->bank2);
+        s = flashes_select_bank(state->bank2);
         if (s) goto broken;
 
         /* Write recipt that block was succesfully written
@@ -213,12 +223,12 @@ os_sleep(1000);
          */
         if (state->addr == 0)
         {
-            state->bank2 = !flash_is_bank2_selected();
+            state->bank2 = !flashes_is_bank2_selected();
         }
 
         /* Write program binary to flash memory.
          */
-        s = flash_write(state->addr, buf, nbytes, state->bank2, &state->next_sector_to_erase);
+        s = flashes_write(state->addr, buf, nbytes, state->bank2, &state->next_sector_to_erase);
         if (s) goto broken;
         state->addr += nbytes;
     }
