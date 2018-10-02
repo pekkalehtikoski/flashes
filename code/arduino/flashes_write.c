@@ -450,11 +450,63 @@ void setMspAndJump(os_uint usrAddr) {
     usrMain();                                /* go! */
 }
 
+#define EnablePrivilegedMode() __asm("SVC #0")
 
 void flashes_jump_to_application(void)
 {
 #if FLASHES_BOOT_LOADER_MODE
 
+// os_uint aaa = APPLICATION_BASE_ADDR;
+os_uint *Address = (os_uint *)0x00020000;
+// os_uint *Address = (os_uint *)APPLICATION_BASE_ADDR;
+
+ if( CONTROL_nPRIV_Msk & __get_CONTROL( ) )
+  {  /* not in privileged mode */
+    EnablePrivilegedMode( ) ;
+  }
+
+NVIC->ICER[ 0 ] = 0xFFFFFFFF ;
+NVIC->ICER[ 1 ] = 0xFFFFFFFF ;
+NVIC->ICER[ 2 ] = 0xFFFFFFFF ;
+NVIC->ICER[ 3 ] = 0xFFFFFFFF ;
+NVIC->ICER[ 4 ] = 0xFFFFFFFF ;
+NVIC->ICER[ 5 ] = 0xFFFFFFFF ;
+NVIC->ICER[ 6 ] = 0xFFFFFFFF ;
+NVIC->ICER[ 7 ] = 0xFFFFFFFF ;
+
+NVIC->ICPR[ 0 ] = 0xFFFFFFFF ;
+NVIC->ICPR[ 1 ] = 0xFFFFFFFF ;
+NVIC->ICPR[ 2 ] = 0xFFFFFFFF ;
+NVIC->ICPR[ 3 ] = 0xFFFFFFFF ;
+NVIC->ICPR[ 4 ] = 0xFFFFFFFF ;
+NVIC->ICPR[ 5 ] = 0xFFFFFFFF ;
+NVIC->ICPR[ 6 ] = 0xFFFFFFFF ;
+NVIC->ICPR[ 7 ] = 0xFFFFFFFF ;
+
+SysTick->CTRL = 0 ;
+SCB->ICSR |= SCB_ICSR_PENDSTCLR_Msk ;
+
+SCB->SHCSR &= ~( SCB_SHCSR_USGFAULTENA_Msk | \
+                 SCB_SHCSR_BUSFAULTENA_Msk | \
+                 SCB_SHCSR_MEMFAULTENA_Msk ) ;
+
+// Activate the MSP, if the core is found to currently run with the PSP.
+if( CONTROL_SPSEL_Msk & __get_CONTROL( ) )
+{  /* MSP is not active */
+  __set_CONTROL( __get_CONTROL( ) & ~CONTROL_SPSEL_Msk ) ;
+}
+
+// Load the vector table address of the user application into SCB->VTOR register. Make sure the address meets the alignment requirements.
+SCB->VTOR = ( uint32_t )Address;
+
+// A few device families, like the NXP 4300 series, will also have a "shadow pointer" to the VTOR, which also needs to be updated with the new address. Review the device datasheet to see if one exists.
+//Set the MSP to the value found in the user application vector table.
+__set_MSP( Address[ 0 ] ) ;
+
+// Set the PC to the reset vector value of the user application via a function call.
+( ( void ( * )( void ) )Address[ 1 ] )( ) ;
+
+#if 0
     /* tear down all the dfu related setup */
     // disable usb interrupts, clear them, turn off usb, set the disc pin
     // todo pick exactly what we want to do here, now its just a conservative
@@ -467,11 +519,15 @@ void flashes_jump_to_application(void)
     HAL_NVIC_DisableIRQ(3);
     HAL_NVIC_DisableIRQ(4);
 
+
+
+
 // Does nothing, as PC12 is not connected on teh Maple mini according to the schemmatic     setPin(GPIOC, 12); // disconnect usb from host. todo, macroize pin
     // systemReset(); // resets clocks and periphs, not core regs
 
     // HAL_NVIC_SystemReset();
 
     setMspAndJump(APPLICATION_BASE_ADDR);
+#endif
 #endif
 }
